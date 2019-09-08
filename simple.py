@@ -63,21 +63,11 @@ for step in range(0, 8):
         if particle.d < best.d:
             best = copy.deepcopy(particle)
 
-    good_particles = []
-    for i in range(0, particle_num):
-        if particles[i].d <= d_threshold:
-            good_particles.append(i)
-
-    # re-sampling
-    resamples = []
-    for particle in particles:
-        new_par = []
-        if particle.d > d_threshold:
-            lottery = int(len(good_particles) * np.random.uniform(0.0, 1.0))
-            new_par = copy.deepcopy(particles[good_particles[lottery]])
-        else:
-            new_par = copy.deepcopy(particle)
-        resamples.append(new_par)
+    particles.sort(key=lambda p: p.d)
+    index = int(len(particles) * 0.5)
+    for i in range(index, len(particles)):
+        lottery = int(index * np.random.uniform(0.0, 1.0))
+        particles[i] = copy.deepcopy(particles[lottery])
 
     sin_x = np.arange(bound[0], bound[1], (bound[1] - bound[0]) / 1000)
     sin_y = [H(x) for x in sin_x]
@@ -92,6 +82,3 @@ for step in range(0, 8):
     plt.draw()
     plt.pause(1.0/1)
     plt.clf()
-
-    particles = resamples
-
