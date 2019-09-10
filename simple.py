@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import copy
+from scipy.interpolate import interp1d
 
 bound = (0.0, 20.0)
 step_size = (bound[1] - bound[0]) / 10
@@ -9,7 +10,12 @@ step_size = (bound[1] - bound[0]) / 10
 d_threshold = 40
 
 def H(state):
-    return np.sin(50 * np.deg2rad(state))
+    # return np.sin(50 * np.deg2rad(state))
+    x = np.linspace(0, 30, num=11, endpoint=True)
+    y = np.cos(-x ** 2 / 9.0)
+    f = interp1d(x, y, kind='cubic')
+    # f = interp1d([0, 5, 10, 15, 20, 25, 30], 2.0 * np.array([0, 0.1, 0.3, 0.34, 0.5, 0.9, 1.4]), 'cubic')
+    return f(state)
 
 class Particle:
     s = []
@@ -80,5 +86,5 @@ for step in range(0, 8):
     plt.xlim((bound[0], bound[1]))
     plt.gca().set_aspect('equal')
     plt.draw()
-    plt.pause(1.0/1)
+    plt.pause(1)
     plt.clf()
