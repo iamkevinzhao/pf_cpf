@@ -1,6 +1,33 @@
 import matplotlib.pyplot as plt
 import math
 
+class StateFusion:
+    last_data = {'stereo': [], 'lidar': []}
+    vol = []
+    def sensor_cb(self, data):
+        last = self.last_data[data['type']]
+        vol = [0.0, 0.0, 0.0]
+        ts = 0
+        if len(last):
+            ts = data['t'] - last['t']
+            vol[0] = (data['p'][0] - last['p'][0]) / ts * 10e9
+            vol[1] = (data['p'][1] - last['p'][1]) / ts * 10e9
+            vol[2] = (data['p'][2] - last['p'][2]) / ts * 10e9
+        data['v'] = vol
+        self.vol.append(vol)
+        self.predict(data)
+        self.correct(data)
+        self.last_data[data['type']] = data
+    def predict(self, data):
+        # print(data)
+        pass
+    def correct(self, data):
+        pass
+
+#######################################################
+
+state_fusion = StateFusion()
+
 filename = "/home/kevin/pf_cpf/data/pamr_pose.txt"
 lidar_ts = []
 lidar_pose = []
@@ -22,6 +49,30 @@ with open(filename) as f:
         parse = line.strip().split()
         stereo_ts.append(int(parse[0]))
         stereo_pose.append([float(parse[1]), float(parse[2]), float(parse[3])])
+
+stereo_idx = 0
+lidar_idx = 0
+while (stereo_idx < (len(stereo_ts) - 1)) or (lidar_idx < (len(lidar_ts) - 1)):
+
+    stereo = {'t': stereo_ts[stereo_idx],
+              'p': [stereo_pose[stereo_idx][0],
+                    stereo_pose[stereo_idx][1],
+                    stereo_pose[stereo_idx][2]],
+              'type': 'stereo'}
+    lidar = {'t': lidar_ts[lidar_idx],
+             'p': [lidar_pose[lidar_idx][0],
+                   lidar_pose[lidar_idx][1],
+                   lidar_pose[lidar_idx][2]],
+             'type': 'lidar'}
+
+    if stereo['t'] < lidar['t']:
+        state_fusion.sensor_cb(stereo)
+        if stereo_idx < (len(stereo_ts) - 1):
+            stereo_idx = stereo_idx + 1
+    else:
+        state_fusion.sensor_cb(lidar)
+        if lidar_idx < (len(lidar_ts) - 1):
+            lidar_idx = lidar_idx + 1
 
 gth = []
 gth.append([0, -164, 90])
@@ -117,10 +168,25 @@ for i in range(0, len(gth)):
    y = y / 100.0 - 2.7
    gth[i] = [x, y]
 
-print(len(stereo_ts), len(lidar_pose))
-plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))], [lidar_pose[i][1] for i in range(len(lidar_pose))], '-', label='lidar', markersize=1)
-plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))], [stereo_pose[i][1] for i in range(len(stereo_pose))], '-', label='stereo', markersize=1)
-plt.plot([gth[i][0] for i in range(len(gth))], [gth[i][1] for i in range(len(gth))], '-', label='groundtruth', markersize=1)
+# print(len(stereo_ts), len(lidar_pose))
+plt.figure(0)
+plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
+         [lidar_pose[i][1] for i in range(len(lidar_pose))],
+         '-', label='lidar', markersize=1)
+plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
+         [stereo_pose[i][1] for i in range(len(stereo_pose))],
+         '-', label='stereo', markersize=1)
+plt.plot([gth[i][0] for i in range(len(gth))],
+         [gth[i][1] for i in range(len(gth))],
+         '-', label='groundtruth', markersize=1)
 plt.legend(loc='upper left')
 plt.gca().set_aspect('equal')
+
+plt.figure(1)
+plt.plot([i for i in range(len(state_fusion.vol))],
+         [state_fusion.vol[i][0] for i in range(len(state_fusion.vol))], '.', markersize=1)
+plt.plot([i for i in range(len(state_fusion.vol))],
+         [state_fusion.vol[i][1] for i in range(len(state_fusion.vol))], '.', markersize=1)
+plt.plot([i for i in range(len(state_fusion.vol))],
+         [state_fusion.vol[i][2] for i in range(len(state_fusion.vol))], '.', markersize=1)
 plt.show()
