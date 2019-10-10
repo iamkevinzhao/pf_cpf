@@ -1,9 +1,27 @@
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 
 class StateFusion:
     last_data = {'stereo': [], 'lidar': []}
     vol = []
+    trace = []
+    state = []
+    state_t = []
+    cov = np.zeros([6, 6])
+    # Q = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+    Q = np.diag([0.001, 0.001, 0.001, 0.001, 0.001, 0.001])
+    # lidar_cov = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+    lidar_cov = np.diag([0.2, 0.2, 0.5, 0.5, 0.5, 0.5])
+    # stereo_cov = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+    stereo_cov = np.diag([0.5, 0.5, 0.1, 0.1, 0.1, 0.1])
+    def A(self, t):
+        return np.array([[1, 0, 0, t, 0, 0],
+                         [0, 1, 0, 0, t, 0],
+                         [0, 0, 1, 0, 0, t],
+                         [0, 0, 0, 1, 0, 0],
+                         [0, 0, 0, 0, 1, 0],
+                         [0, 0, 0, 0, 0, 1]])
     def sensor_cb(self, data):
         last = self.last_data[data['type']]
         vol = [0.0, 0.0, 0.0]
@@ -14,15 +32,55 @@ class StateFusion:
             vol[1] = (data['p'][1] - last['p'][1]) / ts * 10e9
             vol[2] = (data['p'][2] - last['p'][2]) / ts * 10e9
         data['v'] = vol
-        self.vol.append(vol)
+        if data['type'] == 'lidar':
+            data['cov'] = self.lidar_cov
+        else:
+            data['cov'] = self.stereo_cov
+
+        if data['type'] == 'stereo':
+            self.vol.append(vol)
         self.predict(data)
         self.correct(data)
         self.last_data[data['type']] = data
     def predict(self, data):
-        # print(data)
+        if len(self.state) == 0:
+            self.state = np.array(data['p'] + data['v']).transpose()
+            self.state_t = data['t']
+            self.cov = self.Q
+            return
+        t = data['t'] - self.state_t
+        self.state_t = data['t']
+        A = self.A(t / 10e9)
+        self.state = A.dot(self.state)
+        self.wrap_angles(self.state)
+        self.cov = A.dot(self.cov).dot(A.transpose()) + self.Q
+        # self.cov = self.Q
+        # print(self.cov)
         pass
     def correct(self, data):
+        x_hat = np.concatenate((self.state, data['p'] + data['v']))
+        P = np.zeros((12, 12))
+        for c in range(0, 6):
+            for r in range(0, 6):
+                P[r, c] = self.cov[r, c]
+        for c in range(0, 6):
+            for r in range(0, 6):
+                P[r + 6, c + 6] = data['cov'][r, c]
+        P_inv = np.linalg.inv(P)
+        M = np.vstack((np.identity(6), np.identity(6)))
+        P_tilde = np.linalg.inv(M.transpose().dot(P_inv).dot(M))
+        P_tilde = M.dot(P_tilde).dot(M.transpose())
+        x_tilde = P_tilde.dot(P_inv).dot(x_hat)
+        self.state = x_tilde[0:6]
+        self.cov = P_tilde[0:6, 0:6]
+        self.wrap_angles(self.state)
+        self.trace.append(self.state)
         pass
+    def wrap_angles(self, state):
+        while state[2] > math.pi:
+            state[2] = state[2] - math.pi
+        while state[2] < -math.pi:
+            state[2] = state[2] + math.pi
 
 #######################################################
 
@@ -172,13 +230,16 @@ for i in range(0, len(gth)):
 plt.figure(0)
 plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
          [lidar_pose[i][1] for i in range(len(lidar_pose))],
-         '-', label='lidar', markersize=1)
+         '.', label='lidar', markersize=1)
 plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
          [stereo_pose[i][1] for i in range(len(stereo_pose))],
-         '-', label='stereo', markersize=1)
+         '.', label='stereo', markersize=1)
 plt.plot([gth[i][0] for i in range(len(gth))],
          [gth[i][1] for i in range(len(gth))],
-         '-', label='groundtruth', markersize=1)
+         '.', label='groundtruth', markersize=1)
+plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace))],
+         [state_fusion.trace[i][1] for i in range(len(state_fusion.trace))],
+         '.', label='cpf', markersize=1)
 plt.legend(loc='upper left')
 plt.gca().set_aspect('equal')
 
