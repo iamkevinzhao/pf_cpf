@@ -32,12 +32,12 @@ class StateFusion:
             vol[1] = (data['p'][1] - last['p'][1]) / ts * 10e9
             vol[2] = (data['p'][2] - last['p'][2]) / ts * 10e9
         data['v'] = vol
-        if data['type'] == 'lidar':
+        if data['type'] == 'stereo':
             data['cov'] = self.lidar_cov
         else:
             data['cov'] = self.stereo_cov
 
-        if data['type'] == 'stereo':
+        if data['type'] == 'lidar':
             self.vol.append(vol)
         self.predict(data)
         self.correct(data)
@@ -86,12 +86,15 @@ class StateFusion:
 
 state_fusion = StateFusion()
 
+stop = 1570543968000000000
 filename = "/home/kevin/pf_cpf/data/pamr_pose.txt"
 lidar_ts = []
 lidar_pose = []
 with open(filename) as f:
     for line in f:
         parse = line.strip().split()
+        if int(parse[0]) > stop:
+            break
         lidar_ts.append(int(parse[0]))
         lidar_pose.append([float(parse[1]), float(parse[2]), float(parse[3])])
 
@@ -105,8 +108,16 @@ with open(filename) as f:
         if (i % 5) != 0:
             continue
         parse = line.strip().split()
+        if int(parse[0]) > stop:
+            break
         stereo_ts.append(int(parse[0]))
         stereo_pose.append([float(parse[1]), float(parse[2]), float(parse[3])])
+
+dx = lidar_pose[0][0] - stereo_pose[0][0]
+dy = lidar_pose[0][1] - stereo_pose[0][1]
+for i in range(0, len(stereo_pose)):
+    stereo_pose[i][0] += dx
+    stereo_pose[i][1] += dy
 
 stereo_idx = 0
 lidar_idx = 0
@@ -123,6 +134,9 @@ while (stereo_idx < (len(stereo_ts) - 1)) or (lidar_idx < (len(lidar_ts) - 1)):
                    lidar_pose[lidar_idx][2]],
              'type': 'lidar'}
 
+    if (stereo['t'] > (stop - 1000000000)) or (lidar['t'] > (stop - 1000000000)):
+        break
+    print(stereo['t'], lidar['t'])
     if stereo['t'] < lidar['t']:
         state_fusion.sensor_cb(stereo)
         if stereo_idx < (len(stereo_ts) - 1):
@@ -226,6 +240,10 @@ for i in range(0, len(gth)):
    y = y / 100.0 - 2.7
    gth[i] = [x, y]
 
+for i in range(len(lidar_pose)):
+    if abs(lidar_pose[i][0]) > 10 or abs(lidar_pose[i][1]) > 10:
+        lidar_pose[i][0] = 0
+        lidar_pose[i][1] = 0
 # print(len(stereo_ts), len(lidar_pose))
 plt.figure(0)
 plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
@@ -234,9 +252,9 @@ plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
 plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
          [stereo_pose[i][1] for i in range(len(stereo_pose))],
          '.', label='stereo', markersize=1)
-plt.plot([gth[i][0] for i in range(len(gth))],
-         [gth[i][1] for i in range(len(gth))],
-         '.', label='groundtruth', markersize=1)
+# plt.plot([gth[i][0] for i in range(len(gth))],
+#          [gth[i][1] for i in range(len(gth))],
+#          '.', label='groundtruth', markersize=1)
 plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace))],
          [state_fusion.trace[i][1] for i in range(len(state_fusion.trace))],
          '.', label='cpf', markersize=1)
@@ -245,9 +263,28 @@ plt.gca().set_aspect('equal')
 
 plt.figure(1)
 plt.plot([i for i in range(len(state_fusion.vol))],
-         [state_fusion.vol[i][0] for i in range(len(state_fusion.vol))], '.', markersize=1)
-plt.plot([i for i in range(len(state_fusion.vol))],
-         [state_fusion.vol[i][1] for i in range(len(state_fusion.vol))], '.', markersize=1)
-plt.plot([i for i in range(len(state_fusion.vol))],
-         [state_fusion.vol[i][2] for i in range(len(state_fusion.vol))], '.', markersize=1)
+         [state_fusion.vol[i][0] for i in range(len(state_fusion.vol))], '.', markersize=5)
+# plt.plot([i for i in range(len(state_fusion.vol))],
+#         [state_fusion.vol[i][1] for i in range(len(state_fusion.vol))], '.', markersize=3)
+# plt.plot([i for i in range(len(state_fusion.vol))],
+#         [state_fusion.vol[i][2] for i in range(len(state_fusion.vol))], '.', markersize=3)
 plt.show()
+
+# filename = "/home/kevin/KeyFrameTrajectory_TUM_Format.txt"
+# stereo_ts = []
+# stereo_pose = []
+# i = -1
+# with open(filename) as f:
+#     for line in f:
+#         # i = i + 1
+#         # if (i % 5) != 0:
+#         #     continue
+#         parse = line.strip().split()
+#         # stereo_ts.append(int(parse[0]))
+#         stereo_pose.append([float(parse[1]), float(parse[2]), float(parse[3])])
+# plt.figure(2)
+# plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
+#          [stereo_pose[i][2] for i in range(len(stereo_pose))],
+#          '.', label='stereo', markersize=1)
+# plt.gca().set_aspect('equal')
+# plt.show()
