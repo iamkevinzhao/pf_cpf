@@ -18,12 +18,13 @@ class StateFusion:
         # cov = np.diag([0.1, 0.1, 0.1])
         self.cov = np.diag([0.1, 0.1, 0.1])
         self.t_approx = 0.2 * 1e9
-        self.Q = np.diag([0.0221, 0.0221, 0.0733]) * 0.03
+        self.Q = np.diag([0.0221, 0.0221, 0.033]) * 0.03
         # Q = np.diag([0.007, 0.007, 0.0733])
-        self.lidar_cov = np.diag([0.00334, 0.00334, 0.0233]) * 0.03
+        self.lidar_cov = np.diag([0.00334, 0.00334, 0.0433]) * 0.03
         self.stereo_cov = np.diag([0.0253, 0.0253, 0.0388]) * 0.03
         # self.stereo_cov = np.diag([0.0203, 0.0103, 0.0388]) * 0.03
         self.d9 = 16.9
+        self.trace_t = []
     def sensor_cb(self, data):
         if data['type'] == 'stereo':
             self.stereo_his.append(data)
@@ -111,6 +112,7 @@ class StateFusion:
         self.state_his[-1] = state
         self.cov = P[0:3, 0:3]
         self.trace.append(state['p'])
+        self.trace_t.append(ts)
 
         x_tilde3 = np.vstack((x_tilde, x_tilde, x_tilde))
         d = (((x_hat - x_tilde3).transpose()).dot(P_inv)).dot(x_hat - x_tilde3)[0][0]
@@ -214,21 +216,32 @@ for i in range(len(lidar_pose)):
 # print(state_fusion.trace[1], lidar_pose[1])
 # print('-------------')
 
+del lidar_pose[-3:]
+del lidar_ts[-3:]
+del stereo_pose[-5:]
+del stereo_ts[-5:]
+del state_fusion.trace[-1:]
+del state_fusion.trace_t[-1:]
+del outlier_removal.trace[-1:]
+del outlier_removal.trace_t[-1:]
+
 plt.figure(0)
-plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose) - 2)],
-         [lidar_pose[i][1] for i in range(len(lidar_pose) - 2)],
+plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
+         [lidar_pose[i][1] for i in range(len(lidar_pose))],
          '-', label='lidar', markersize=1)
-plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose) - 5)],
-         [stereo_pose[i][1] for i in range(len(stereo_pose) - 5)],
+plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
+         [stereo_pose[i][1] for i in range(len(stereo_pose))],
          '-', label='stereo', markersize=1)
-plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace) - 1)],
-         [state_fusion.trace[i][1] for i in range(len(state_fusion.trace) - 1)],
+plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace))],
+         [state_fusion.trace[i][1] for i in range(len(state_fusion.trace))],
          '-', label='cpf', markersize=1)
-plt.plot([outlier_removal.trace[i][0] for i in range(len(outlier_removal.trace) - 1)],
-         [outlier_removal.trace[i][1] for i in range(len(outlier_removal.trace) - 1)],
+plt.plot([outlier_removal.trace[i][0] for i in range(len(outlier_removal.trace))],
+         [outlier_removal.trace[i][1] for i in range(len(outlier_removal.trace))],
          '-', label='cpf_outlier', markersize=1)
 ground = np.loadtxt('data/groundtruth.txt')
-# print(ground)
+print("(%f, %f, %f) vs. (%f, %f, %f) " %
+      (ground[-1, 0], ground[-1, 1], ground[-1, 2],
+      state_fusion.trace[-1][0], state_fusion.trace[-1][1], state_fusion.trace[-1][2]))
 plt.plot(ground[:, 0], ground[:, 1], '-', label='ground-truth', markersize=1)
 plt.legend(loc='upper left')
 plt.gca().set_aspect('equal')
@@ -239,4 +252,24 @@ plt.plot([state_fusion.d[i][0] for i in range(0, len(state_fusion.d))],
          '-', label='d', markersize=1)
 plt.plot([state_fusion.d[i][0] for i in range(0, len(state_fusion.d))],
          [16.9 for i in range(0, len(state_fusion.d))], '-')
+
+plt.figure(2)
+plt.plot([lidar_ts[i] for i in range(len(lidar_ts))],
+         [math.degrees(lidar_pose[i][2]) for i in range(len(lidar_pose))],
+         '-', label='lidar', markersize=1)
+plt.plot([stereo_ts[i] for i in range(len(stereo_pose))],
+         [math.degrees(stereo_pose[i][2]) for i in range(len(stereo_pose))],
+         '-', label='stereo', markersize=1)
+ground = np.delete(ground, -1, 0)
+plt.plot([ground[i][4] for i in range(len(ground))],
+         [math.degrees(ground[i][2]) for i in range(len(ground))],
+         '-', label='groundtruth', markersize=1)
+plt.plot([state_fusion.trace_t[i] for i in range(len(state_fusion.trace_t))],
+         [math.degrees(state_fusion.trace[i][2]) for i in range(len(state_fusion.trace))],
+         '-', label='cpf', markersize=1)
+plt.plot([outlier_removal.trace_t[i] for i in range(len(outlier_removal.trace_t))],
+         [math.degrees(outlier_removal.trace[i][2]) for i in range(len(outlier_removal.trace))],
+         '-', label='cpf_outlier', markersize=1)
+plt.legend(loc='upper left')
+
 plt.show()
