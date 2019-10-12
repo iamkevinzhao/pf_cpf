@@ -3,12 +3,14 @@ import math
 import numpy as np
 
 class StateFusion:
-    last_data = {'stereo': [], 'lidar': []}
+    last_lidar = []
+    stereo_his = []
     vol = []
     trace = []
     state = []
     state_t = []
     cov = np.zeros([6, 6])
+    t_approx = 0.15 * 1e9
     # Q = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
     Q = np.diag([0.001, 0.001, 0.001, 0.001, 0.001, 0.001])
     # lidar_cov = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
@@ -23,59 +25,87 @@ class StateFusion:
                          [0, 0, 0, 0, 1, 0],
                          [0, 0, 0, 0, 0, 1]])
     def sensor_cb(self, data):
-        last = self.last_data[data['type']]
-        vol = [0.0, 0.0, 0.0]
-        ts = 0
-        if len(last):
-            ts = data['t'] - last['t']
-            vol[0] = (data['p'][0] - last['p'][0]) / ts * 10e9
-            vol[1] = (data['p'][1] - last['p'][1]) / ts * 10e9
-            vol[2] = (data['p'][2] - last['p'][2]) / ts * 10e9
-        data['v'] = vol
         if data['type'] == 'stereo':
             data['cov'] = self.lidar_cov
         else:
             data['cov'] = self.stereo_cov
 
-        if data['type'] == 'lidar':
-            self.vol.append(vol)
-        self.predict(data)
-        self.correct(data)
-        self.last_data[data['type']] = data
-    def predict(self, data):
-        if len(self.state) == 0:
-            self.state = np.array(data['p'] + data['v']).transpose()
-            self.state_t = data['t']
-            self.cov = self.Q
+        if data['type'] == 'stereo':
+            self.stereo_his.append(data)
             return
-        t = data['t'] - self.state_t
-        self.state_t = data['t']
-        A = self.A(t / 10e9)
-        self.state = A.dot(self.state)
-        self.wrap_angles(self.state)
-        self.cov = A.dot(self.cov).dot(A.transpose()) + self.Q
-        # self.cov = self.Q
-        # print(self.cov)
+
+        if len(self.last_lidar) == 0:
+            if data['type'] == 'lidar':
+                self.last_lidar = data
+            return
+
+        ts = data['t'] - self.last_lidar['t']
+        self.predict(ts)
+
+        stereo_2 = []
+        stereo_1 = []
+        for stereo in reversed(self.stereo_his):
+            if abs(data['t'] - stereo['t']) < self.t_approx:
+                stereo_2 = stereo
+                break
+        if len(stereo_2):
+            for stereo in reversed(self.stereo_his):
+                if stereo['t'] > self.last_lidar['t']:
+                    continue
+                if abs(self.last_lidar['t'] - stereo['t']) < self.t_approx:
+                    stereo_1 = stereo
+                    break
+
+        dp_lidar = np.array(data['p']) - np.array(self.last_lidar['p'])
+
+        if len(stereo_2) and len(stereo_1):
+            dp_stereo = np.array(stereo_2['p']) - np.array(stereo_1['p'])
+            self.correct(data, dp_lidar, dp_stereo)
+            print(data['t'] / float(1e9), stereo_2['t'] / float(1e9), self.last_lidar['t'] / float(1e9), stereo_1['t'] / float(1e9))
+        else:
+            self.correct(ts, dp_lidar)
+            print(data['t'] / float(1e9), self.last_lidar['t'] / float(1e9))
+
+        if data['type'] == 'lidar':
+            self.last_lidar = data
+    def predict(self, ts):
         pass
-    def correct(self, data):
-        x_hat = np.concatenate((self.state, data['p'] + data['v']))
-        P = np.zeros((12, 12))
-        for c in range(0, 6):
-            for r in range(0, 6):
-                P[r, c] = self.cov[r, c]
-        for c in range(0, 6):
-            for r in range(0, 6):
-                P[r + 6, c + 6] = data['cov'][r, c]
-        P_inv = np.linalg.inv(P)
-        M = np.vstack((np.identity(6), np.identity(6)))
-        P_tilde = np.linalg.inv(M.transpose().dot(P_inv).dot(M))
-        P_tilde = M.dot(P_tilde).dot(M.transpose())
-        x_tilde = P_tilde.dot(P_inv).dot(x_hat)
-        self.state = x_tilde[0:6]
-        self.cov = P_tilde[0:6, 0:6]
-        self.wrap_angles(self.state)
-        self.trace.append(self.state)
+    def correct(self, ts, dp_lidar, dp_stereo = []):
         pass
+    # def predict(self, data):
+    #     if len(self.state) == 0:
+    #         self.state = np.array(data['p'] + data['v']).transpose()
+    #         self.state_t = data['t']
+    #         self.cov = self.Q
+    #         return
+    #     t = data['t'] - self.state_t
+    #     self.state_t = data['t']
+    #     A = self.A(t / 10e9)
+    #     self.state = A.dot(self.state)
+    #     self.wrap_angles(self.state)
+    #     self.cov = A.dot(self.cov).dot(A.transpose()) + self.Q
+    #     # self.cov = self.Q
+    #     # print(self.cov)
+    #     pass
+    # def correct(self, data):
+    #     x_hat = np.concatenate((self.state, data['p'] + data['v']))
+    #     P = np.zeros((12, 12))
+    #     for c in range(0, 6):
+    #         for r in range(0, 6):
+    #             P[r, c] = self.cov[r, c]
+    #     for c in range(0, 6):
+    #         for r in range(0, 6):
+    #             P[r + 6, c + 6] = data['cov'][r, c]
+    #     P_inv = np.linalg.inv(P)
+    #     M = np.vstack((np.identity(6), np.identity(6)))
+    #     P_tilde = np.linalg.inv(M.transpose().dot(P_inv).dot(M))
+    #     P_tilde = M.dot(P_tilde).dot(M.transpose())
+    #     x_tilde = P_tilde.dot(P_inv).dot(x_hat)
+    #     self.state = x_tilde[0:6]
+    #     self.cov = P_tilde[0:6, 0:6]
+    #     self.wrap_angles(self.state)
+    #     self.trace.append(self.state)
+    #     pass
     def wrap_angles(self, state):
         while state[2] > math.pi:
             state[2] = state[2] - math.pi
@@ -136,7 +166,7 @@ while (stereo_idx < (len(stereo_ts) - 1)) or (lidar_idx < (len(lidar_ts) - 1)):
 
     if (stereo['t'] > (stop - 1000000000)) or (lidar['t'] > (stop - 1000000000)):
         break
-    print(stereo['t'], lidar['t'])
+    # print(stereo['t'], lidar['t'])
     if stereo['t'] < lidar['t']:
         state_fusion.sensor_cb(stereo)
         if stereo_idx < (len(stereo_ts) - 1):
@@ -145,6 +175,8 @@ while (stereo_idx < (len(stereo_ts) - 1)) or (lidar_idx < (len(lidar_ts) - 1)):
         state_fusion.sensor_cb(lidar)
         if lidar_idx < (len(lidar_ts) - 1):
             lidar_idx = lidar_idx + 1
+
+exit()
 
 gth = []
 gth.append([0, -164, 90])
