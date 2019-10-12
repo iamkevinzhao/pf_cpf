@@ -1,22 +1,37 @@
 import matplotlib.pyplot as plt
 import math
 import numpy as np
+from scipy.interpolate import interp1d
+from scipy.linalg import block_diag
+import warnings
+warnings.simplefilter('ignore', np.RankWarning)
 
+# x = np.array([0.0, 1.0, 2.0, 3.0,  4.0,  5.0])
+# y = np.array([0.0, 0.8, 0.9, 0.1, -0.8, -1.0])
+# z = np.polyfit(x, y, 2)
+# p = np.poly1d(z)
+# lin = np.linspace(0, 6, 100)
+# plt.plot([x for x in lin], [p(x) for x in lin])
+# plt.plot(x, y)
+# plt.show()
 class StateFusion:
     last_lidar = []
     stereo_his = []
     vol = []
     trace = []
     state = []
+    state_his = []
     state_t = []
-    cov = np.zeros([6, 6])
+    # cov = np.zeros([6, 6])
+    cov = np.diag([1000, 1000, 1000])
     t_approx = 0.15 * 1e9
     # Q = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
-    Q = np.diag([0.001, 0.001, 0.001, 0.001, 0.001, 0.001])
+    # Q = np.diag([0.001, 0.001, 0.001])
+    Q = np.diag([1000, 1000, 1000])
     # lidar_cov = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
-    lidar_cov = np.diag([0.2, 0.2, 0.5, 0.5, 0.5, 0.5])
+    lidar_cov = np.diag([0.2, 0.2, 0.2])
     # stereo_cov = np.diag([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
-    stereo_cov = np.diag([0.5, 0.5, 0.1, 0.1, 0.1, 0.1])
+    stereo_cov = np.diag([5, 5, 5])
     def A(self, t):
         return np.array([[1, 0, 0, t, 0, 0],
                          [0, 1, 0, 0, t, 0],
@@ -39,8 +54,8 @@ class StateFusion:
                 self.last_lidar = data
             return
 
-        ts = data['t'] - self.last_lidar['t']
-        self.predict(ts)
+        ts = data['t'] # - self.last_lidar['t']
+        self.predict(ts, data)
 
         stereo_2 = []
         stereo_1 = []
@@ -56,21 +71,67 @@ class StateFusion:
                     stereo_1 = stereo
                     break
 
-        dp_lidar = np.array(data['p']) - np.array(self.last_lidar['p'])
+        dp_lidar = np.array([data['p']]) - np.array([self.last_lidar['p']])
 
         if len(stereo_2) and len(stereo_1):
-            dp_stereo = np.array(stereo_2['p']) - np.array(stereo_1['p'])
-            self.correct(data, dp_lidar, dp_stereo)
-            print(data['t'] / float(1e9), stereo_2['t'] / float(1e9), self.last_lidar['t'] / float(1e9), stereo_1['t'] / float(1e9))
+            dp_stereo = np.array([stereo_2['p']]) - np.array([stereo_1['p']])
+            self.correct(ts, dp_lidar, dp_stereo)
+            # print(data['t'] / float(1e9), stereo_2['t'] / float(1e9), self.last_lidar['t'] / float(1e9), stereo_1['t'] / float(1e9))
         else:
             self.correct(ts, dp_lidar)
-            print(data['t'] / float(1e9), self.last_lidar['t'] / float(1e9))
+            # print(data['t'] / float(1e9), self.last_lidar['t'] / float(1e9))
 
         if data['type'] == 'lidar':
             self.last_lidar = data
-    def predict(self, ts):
+    def predict(self, ts, data):
+        buf_len = 5
+        if len(self.state_his) < buf_len:
+            self.state_his.append(data)
+            return
+        t = np.array([self.state_his[ii]['t'] for ii in range(len(self.state_his) - buf_len, len(self.state_his))])
+        p = np.array([self.state_his[ii]['p'] for ii in range(len(self.state_his) - buf_len, len(self.state_his))])
+        # print(t)
+        fitx = np.poly1d(np.polyfit(t, p[:, 0], 1))
+        fity = np.poly1d(np.polyfit(t, p[:, 1], 1))
+        fita = np.poly1d(np.polyfit(t, p[:, 2], 1))
+        if len(self.state) == 0:
+            self.state = {}
+        self.state['p'] = [fitx(data['t']), fity(data['t']), fita(data['t'])]
+        self.cov = self.Q
+        self.wrap_angles(self.state['p'])
         pass
     def correct(self, ts, dp_lidar, dp_stereo = []):
+        inf = 1000000
+        x1 = np.array([[0, 0, 0]]).transpose()
+        q1 = np.diag([inf, inf, inf])
+        x2 = x1.copy()
+        q2 = q1.copy()
+        x3 = x1.copy()
+        q3 = q1.copy()
+        if len(self.state):
+            x1 = (np.array([self.state['p']]) - np.array([self.state_his[-1]['p']])).transpose()
+            q1 = self.cov
+            pass
+        x2 = dp_lidar.transpose()
+        q2 = self.lidar_cov
+        if len(dp_stereo):
+            x3 = dp_stereo.transpose()
+            q3 = self.stereo_cov
+        x_hat = np.vstack((x1, x2, x3))
+        P = block_diag(q1, q2, q3)
+        P_inv = np.linalg.inv(P)
+        M = np.vstack((np.identity(3), np.identity(3), np.identity(3)))
+        P_tilde = np.linalg.inv((M.transpose().dot(P_inv)).dot(M))
+        x_tilde = ((P_tilde.dot(M.transpose())).dot(P_inv)).dot(x_hat)
+        if len(self.state) == 0:
+            self.state = {}
+        ppp = self.state_his[-1]['p'] + x_tilde[:, 0]
+        self.state['p'] = [ppp[0], ppp[1], ppp[2]]
+        self.state['t'] = ts
+        self.state_his.append(self.state)
+        self.cov = P[0:3, 0:3]
+        self.trace.append(self.state['p'])
+        print(self.state['p'])
         pass
     # def predict(self, data):
     #     if len(self.state) == 0:
@@ -175,8 +236,6 @@ while (stereo_idx < (len(stereo_ts) - 1)) or (lidar_idx < (len(lidar_ts) - 1)):
         state_fusion.sensor_cb(lidar)
         if lidar_idx < (len(lidar_ts) - 1):
             lidar_idx = lidar_idx + 1
-
-exit()
 
 gth = []
 gth.append([0, -164, 90])
