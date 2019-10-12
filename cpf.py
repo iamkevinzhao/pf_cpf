@@ -96,9 +96,6 @@ class StateFusion:
         P_tilde = np.linalg.inv((M.transpose().dot(P_inv)).dot(M))
         x_tilde = ((P_tilde.dot(M.transpose())).dot(P_inv)).dot(x_hat)
         np.set_printoptions(precision=3, suppress=True)
-        print(x_hat.transpose())
-        print(x_tilde.transpose())
-        print('------------')
         if len(self.state_his) < 2:
             ppp = self.state_his[-1]['p'] + x_tilde[:, 0]
         else:
@@ -191,14 +188,14 @@ for i in range(len(lidar_pose)):
 # print('-------------')
 
 plt.figure(0)
-plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
-         [lidar_pose[i][1] for i in range(len(lidar_pose))],
+plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose) - 2)],
+         [lidar_pose[i][1] for i in range(len(lidar_pose) - 2)],
          '-', label='lidar', markersize=1)
-plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
-         [stereo_pose[i][1] for i in range(len(stereo_pose))],
+plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose) - 5)],
+         [stereo_pose[i][1] for i in range(len(stereo_pose) - 5)],
          '-', label='stereo', markersize=1)
-plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace))],
-         [state_fusion.trace[i][1] for i in range(len(state_fusion.trace))],
+plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace) - 1)],
+         [state_fusion.trace[i][1] for i in range(len(state_fusion.trace) - 1)],
          '-', label='cpf', markersize=1)
 ground = np.loadtxt('data/groundtruth.txt')
 print(ground)
