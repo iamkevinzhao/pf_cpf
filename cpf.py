@@ -7,18 +7,23 @@ import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 
 class StateFusion:
-    last_lidar = []
-    stereo_his = []
-    trace = []
-    state = []
-    state_his = []
-    # cov = np.diag([0.1, 0.1, 0.1])
-    cov = np.diag([0.1, 0.1, 0.1])
-    t_approx = 0.2 * 1e9
-    Q = np.diag([0.0221, 0.0221, 0.0733])
-    # Q = np.diag([0.007, 0.007, 0.0733])
-    lidar_cov = np.diag([0.00334, 0.00334, 0.0233])
-    stereo_cov = np.diag([0.0253, 0.0253, 0.0388])
+
+    def __init__(self):
+        self.last_lidar = []
+        self.stereo_his = []
+        self.trace = []
+        self.state = []
+        self.state_his = []
+        self.d = []
+        # cov = np.diag([0.1, 0.1, 0.1])
+        self.cov = np.diag([0.1, 0.1, 0.1])
+        self.t_approx = 0.2 * 1e9
+        self.Q = np.diag([0.0221, 0.0221, 0.0733]) * 0.03
+        # Q = np.diag([0.007, 0.007, 0.0733])
+        self.lidar_cov = np.diag([0.00334, 0.00334, 0.0233]) * 0.03
+        self.stereo_cov = np.diag([0.0253, 0.0253, 0.0388]) * 0.03
+        # self.stereo_cov = np.diag([0.0203, 0.0103, 0.0388]) * 0.03
+        self.d9 = 16.9
     def sensor_cb(self, data):
         if data['type'] == 'stereo':
             self.stereo_his.append(data)
@@ -106,7 +111,25 @@ class StateFusion:
         self.state_his[-1] = state
         self.cov = P[0:3, 0:3]
         self.trace.append(state['p'])
-        # print(state['p'])
+
+        x_tilde3 = np.vstack((x_tilde, x_tilde, x_tilde))
+        d = (((x_hat - x_tilde3).transpose()).dot(P_inv)).dot(x_hat - x_tilde3)[0][0]
+        self.d.append([ts / 1e9, d])
+        if d > self.d9:
+            ppp = self.state_his[-2]['p'] + x2[:, 0]
+            P[6, 6] = inf
+            P[7, 7] = inf
+            P[8, 8] = inf
+            P_inv = np.linalg.inv(P)
+            P_tilde = np.linalg.inv((M.transpose().dot(P_inv)).dot(M))
+            x_tilde = ((P_tilde.dot(M.transpose())).dot(P_inv)).dot(x_hat)
+            if len(self.state_his) < 2:
+                ppp = self.state_his[-1]['p'] + x_tilde[:, 0]
+            else:
+                ppp = self.state_his[-2]['p'] + x_tilde[:, 0]
+            state['p'] = [ppp[0], ppp[1], ppp[2]]
+            self.state_his[-1] = state
+            self.trace[-1] = state['p']
         pass
     def wrap_angles(self, state):
         while state[2] > math.pi:
@@ -117,6 +140,8 @@ class StateFusion:
 #######################################################
 
 state_fusion = StateFusion()
+outlier_removal = StateFusion()
+outlier_removal.d9 = 10000
 
 stop = 1570543968000000000
 filename = "/home/kevin/pf_cpf/data/pamr_pose.txt"
@@ -170,11 +195,13 @@ while (stereo_idx < (len(stereo_ts) - 1)) and (lidar_idx < (len(lidar_ts) - 1)):
     #     break
     # print(stereo['t'], lidar['t'])
     if stereo['t'] < lidar['t']:
-        state_fusion.sensor_cb(stereo)
+        state_fusion.sensor_cb(stereo.copy())
+        outlier_removal.sensor_cb(stereo.copy())
         if stereo_idx < (len(stereo_ts) - 1):
             stereo_idx = stereo_idx + 1
     else:
-        state_fusion.sensor_cb(lidar)
+        state_fusion.sensor_cb(lidar.copy())
+        outlier_removal.sensor_cb(lidar.copy())
         if lidar_idx < (len(lidar_ts) - 1):
             lidar_idx = lidar_idx + 1
 
@@ -197,10 +224,19 @@ plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose) - 5)],
 plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace) - 1)],
          [state_fusion.trace[i][1] for i in range(len(state_fusion.trace) - 1)],
          '-', label='cpf', markersize=1)
+plt.plot([outlier_removal.trace[i][0] for i in range(len(outlier_removal.trace) - 1)],
+         [outlier_removal.trace[i][1] for i in range(len(outlier_removal.trace) - 1)],
+         '-', label='cpf_outlier', markersize=1)
 ground = np.loadtxt('data/groundtruth.txt')
-print(ground)
+# print(ground)
 plt.plot(ground[:, 0], ground[:, 1], '-', label='ground-truth', markersize=1)
 plt.legend(loc='upper left')
 plt.gca().set_aspect('equal')
 
+plt.figure(1)
+plt.plot([state_fusion.d[i][0] for i in range(0, len(state_fusion.d))],
+         [state_fusion.d[i][1] for i in range(0, len(state_fusion.d))],
+         '-', label='d', markersize=1)
+plt.plot([state_fusion.d[i][0] for i in range(0, len(state_fusion.d))],
+         [16.9 for i in range(0, len(state_fusion.d))], '-')
 plt.show()
