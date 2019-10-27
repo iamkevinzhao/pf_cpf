@@ -6,6 +6,74 @@ from scipy.linalg import block_diag
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 
+# x = -0.3
+# y = 0
+# phi = 0 * math.pi / 180
+# h = 1
+# k = 0
+# xx = x * math.cos(phi) - y * math.sin(phi) + h
+# yy = x * math.cos(phi) - y * math.sin(phi) + k
+# print(xx, yy)
+# exit()
+
+initial_measurement = []
+filename = "/home/kevin/pf_cpf/data/orb_pose.txt"
+stereo_ts = []
+stereo_pose = []
+i = -1
+with open(filename) as f:
+    for line in f:
+        parse = line.strip().split()
+        stereo_ts.append(int(parse[0]))
+        measurement = [float(parse[1]) * 1.06, float(parse[2]) * 1.06, float(parse[3])]
+        # if not len(initial_measurement):
+        #     initial_measurement = measurement.copy()
+        #     measurement = [0, 0, 0]
+        # else:
+        #     measurement[0] = measurement[0] - initial_measurement[0]
+        #     measurement[1] = measurement[1] - initial_measurement[1]
+        # print(measurement)
+        stereo_pose.append(measurement)
+
+plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
+         [stereo_pose[i][1] for i in range(len(stereo_pose))],
+         '-', label='stereo', markersize=1)
+
+filename = "/home/kevin/pf_cpf/data/pamr_pose.txt"
+lidar_ts = []
+lidar_pose = []
+with open(filename) as f:
+    for line in f:
+        parse = line.strip().split()
+        if len(lidar_ts):
+            if int(parse[0]) == lidar_ts[-1]:
+                continue
+        lidar_ts.append(int(parse[0]))
+        x = -0.3
+        y = 0
+        phi = float(parse[3])
+        h = float(parse[1])
+        k = float(parse[2])
+        xx = x * math.cos(phi) - y * math.sin(phi) + h
+        yy = x * math.sin(phi) + y * math.cos(phi) + k
+
+        if len(lidar_pose):
+            xx = xx - (lidar_pose[0][0] - 0)
+            yy = yy - (lidar_pose[0][1] - 0)
+        lidar_pose.append([xx, yy, float(parse[3])])
+        # lidar_pose.append([float(parse[1]), float(parse[2]), float(parse[3])])
+
+print(len(stereo_ts))
+
+plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
+         [lidar_pose[i][1] for i in range(len(lidar_pose))],
+         '-', label='lidar', markersize=1)
+
+plt.legend(loc='upper right')
+plt.gca().set_aspect('equal')
+plt.show()
+exit()
+
 class StateFusion:
 
     def __init__(self):
