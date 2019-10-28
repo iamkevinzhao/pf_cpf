@@ -190,10 +190,10 @@ plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
          '-', label='lidar', linewidth=1)
 plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
          [stereo_pose[i][1] for i in range(len(stereo_pose))],
-         '-', label='stereo', linewidth=1)
+         '-', label='camera', linewidth=1)
 plt.plot([state_fusion.state[i][0] for i in range(len(state_fusion.state))],
          [state_fusion.state[i][1] for i in range(len(state_fusion.state))],
-         '-', label='cpf', linewidth=2)
+         '-', label='cpf', linewidth=3)
 plt.plot([outlier_removal.state[i][0] for i in range(len(outlier_removal.state))],
          [outlier_removal.state[i][1] for i in range(len(outlier_removal.state))],
          '-', label='cpf_outlier', linewidth=1)
@@ -202,11 +202,14 @@ plt.legend(loc='upper right')
 plt.gca().set_aspect('equal')
 
 plt.figure(1)
-plt.plot([state_fusion.ts[i] for i in range(0, len(state_fusion.ts))],
+plt.plot([(state_fusion.ts[i] - state_fusion.ts[0]) / 1e11 for i in range(0, len(state_fusion.ts))],
          [state_fusion.d[i] for i in range(0, len(state_fusion.d))],
-         '-', label='d', markersize=1)
-plt.legend(loc='upper right')
-plt.title('CPF distance over time')
+         '-', label='distance', markersize=1)
+plt.plot([(state_fusion.ts[i] - state_fusion.ts[0]) / 1e11 for i in range(0, len(state_fusion.ts))],
+         [state_fusion.d9 for i in range(0, len(state_fusion.d))],
+         '-', label='threshold', markersize=1)
+plt.legend(loc='upper left')
+plt.title('CPF distance (m) over time (sec)')
 
 print(state_fusion.state[-1][0], state_fusion.state[-1][1])
 plt.show()
