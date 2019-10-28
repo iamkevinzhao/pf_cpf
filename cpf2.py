@@ -12,9 +12,10 @@ class StateFusion:
         self.last_lidar = None
         self.state = []
         self.ts = []
-        self.stereo_cov = np.diag([0.05, 0.05, 0.05])
-        self.model_cov = np.diag([0.1, 0.1, 0.1])
-        self.lidar_cov = np.diag([0.7, 0.7, 0.7])
+        self.stereo_cov = np.diag([0.00005, 0.00005, 10000000])
+        self.model_cov = np.diag([0.0001, 0.0001, 10000000])
+        self.lidar_cov = np.diag([0.0001, 0.0001, 10000000])
+        self.d = []
         pass
     def sensor_cb(self, data):
         if data['type'] == 'lidar':
@@ -22,6 +23,7 @@ class StateFusion:
             if len(self.state) == 0:
                 self.state.append(np.array([data['p']]).transpose())
                 self.ts.append(data['t'])
+                self.d.append(0)
             return
 
         if len(self.state) == 0:
@@ -33,6 +35,7 @@ class StateFusion:
             if self.last_lidar is not None:
                 self.state.append(np.array([self.last_lidar['p']]).transpose())
                 self.ts.append(data['t'])
+                self.d.append(0)
             return
 
         stereo_state = self.state[-1] + np.array([data['p']]).transpose() - np.array([self.last_stereo['p']]).transpose()
@@ -41,12 +44,14 @@ class StateFusion:
             print('error')
         lidar_state = np.array([self.last_lidar['p']]).transpose()
 
-        (state, cov) = self.cpf(stereo_state, model_state, lidar_state)
+        (state, cov, d) = self.cpf(stereo_state, model_state, lidar_state)
+        self.d.append(d)
         self.state.append(state)
         self.ts.append(data['t'])
         self.last_stereo = data
+        self.wrap_angles(self.state[-1])
         pass
-    def cpf(self, stereo, model, lidar):
+    def cpf(self, stereo, model, lidar, test=True):
         # print(stereo, model, lidar)
         inf = 10000000
         P1 = self.stereo_cov.copy()
@@ -69,7 +74,23 @@ class StateFusion:
         P_tilde = np.linalg.inv((M.transpose().dot(P_inv)).dot(M))
         x_tilde = ((P_tilde.dot(M.transpose())).dot(P_inv)).dot(x_hat)
         # print(x_tilde, P_tilde)
-        return x_tilde, P_tilde
+
+        x_tilde3 = np.vstack((x_tilde, x_tilde, x_tilde))
+        d = (((x_hat - x_tilde3).transpose()).dot(P_inv)).dot(x_hat - x_tilde3)[0][0]
+        if d > 30:
+            d = 30
+        if test:
+            if d > 17:
+                (state1, cov1, d1) = self.cpf(None, model, lidar, False)
+                (state2, cov2, d2) = self.cpf(stereo, None, lidar, False)
+                (state3, cov3, d3) = self.cpf(stereo, model, None, False)
+                if d1 < d2 and d1 < d3:
+                    x_tilde = state1.copy()
+                if d2 < d1 and d2 < d3:
+                    x_tilde = state2.copy()
+                if d3 < d1 and d3 < d2:
+                    x_tilde = state3.copy()
+        return x_tilde, P_tilde, d
         pass
     def model_state(self, ts):
         buf_len = 10
@@ -98,8 +119,12 @@ outlier_removal.d9 = 10000
 filename = "/home/kevin/pf_cpf/data/orb_pose.txt"
 stereo_ts = []
 stereo_pose = []
+i = -1
 with open(filename) as f:
     for line in f:
+        i = i + 1
+        if (i % 10) != 0:
+            continue
         parse = line.strip().split()
         stereo_ts.append(int(parse[0]))
         measurement = [float(parse[1]) * 1.06, float(parse[2]) * 1.06, float(parse[3])]
@@ -175,12 +200,12 @@ plt.title('global position / meter')
 plt.legend(loc='upper right')
 plt.gca().set_aspect('equal')
 
-# plt.figure(1)
-# plt.plot([state_fusion.d[i][0] for i in range(0, len(state_fusion.d))],
-#          [state_fusion.d[i][1] for i in range(0, len(state_fusion.d))],
-#          '-', label='d', markersize=1)
-# plt.legend(loc='upper right')
-# plt.title('CPF distance over time')
+plt.figure(1)
+plt.plot([state_fusion.ts[i] for i in range(0, len(state_fusion.ts))],
+         [state_fusion.d[i] for i in range(0, len(state_fusion.d))],
+         '-', label='d', markersize=1)
+plt.legend(loc='upper right')
+plt.title('CPF distance over time')
 
 
 plt.show()
