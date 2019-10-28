@@ -20,7 +20,7 @@ class StateFusion:
         self.t_approx = 0.2 * 1e9
         self.Q = np.diag([0.0221, 0.0221, 0.033]) # * 0.3
         # Q = np.diag([0.007, 0.007, 0.0733])
-        self.lidar_cov = np.diag([10.0334, 10.0334, 10.0433]) # * 0.3
+        self.lidar_cov = np.diag([1.0334, 10.0334, 10.0433]) # * 0.3
         self.stereo_cov = np.diag([0.0353, 0.0353, 0.0388]) # * 0.3
         # self.stereo_cov = np.diag([0.0203, 0.0103, 0.0388]) * 0.03
         self.d9 = 16.9
@@ -226,16 +226,16 @@ while (stereo_idx < (len(stereo_ts) - 1)) and (lidar_idx < (len(lidar_ts) - 1)):
 plt.figure(0)
 plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
          [lidar_pose[i][1] for i in range(len(lidar_pose))],
-         '-', label='lidar', markersize=1)
-plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose) - 2)],
-         [stereo_pose[i][1] for i in range(len(stereo_pose) - 2)],
-         '-', label='stereo', markersize=1)
+         '-', label='lidar', linewidth=1)
+plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
+         [stereo_pose[i][1] for i in range(len(stereo_pose))],
+         '-', label='stereo', linewidth=1)
 plt.plot([state_fusion.trace[i][0] for i in range(len(state_fusion.trace))],
          [state_fusion.trace[i][1] for i in range(len(state_fusion.trace))],
-         '-', label='cpf', markersize=1)
+         '-', label='cpf', linewidth=1)
 plt.plot([outlier_removal.trace[i][0] for i in range(len(outlier_removal.trace))],
          [outlier_removal.trace[i][1] for i in range(len(outlier_removal.trace))],
-         '-', label='cpf_outlier', markersize=1)
+         '-', label='cpf_outlier', linewidth=1)
 plt.title('global position / meter')
 # ground = np.loadtxt('data/groundtruth.txt')
 # print("(%f, %f, %f) vs. (%f, %f, %f) " %
@@ -258,24 +258,24 @@ plt.plot([state_fusion.d[i][0] for i in range(0, len(state_fusion.d))],
 plt.legend(loc='upper right')
 plt.title('CPF distance over time')
 
-plt.figure(2)
-plt.plot([lidar_ts[i] for i in range(len(lidar_ts))],
-         [math.degrees(lidar_pose[i][2]) for i in range(len(lidar_pose))],
-         '-', label='lidar', markersize=1)
-plt.plot([stereo_ts[i] for i in range(len(stereo_pose))],
-         [math.degrees(stereo_pose[i][2]) for i in range(len(stereo_pose))],
-         '-', label='stereo', markersize=1)
-plt.plot([state_fusion.trace_t[i] for i in range(len(state_fusion.trace_t))],
-         [math.degrees(state_fusion.trace[i][2]) for i in range(len(state_fusion.trace))],
-         '-', label='cpf', markersize=1)
-plt.plot([outlier_removal.trace_t[i] for i in range(len(outlier_removal.trace_t))],
-         [math.degrees(outlier_removal.trace[i][2]) for i in range(len(outlier_removal.trace))],
-         '-', label='cpf_outlier', markersize=1)
-# ground = np.delete(ground, -1, 0)
-# plt.plot([ground[i][4] for i in range(len(ground))],
-#          [math.degrees(ground[i][2]) for i in range(len(ground))],
-#          '-', label='groundtruth', markersize=1)
-plt.legend(loc='upper right')
-plt.title('global heading (degree) over time')
+# plt.figure(2)
+# plt.plot([lidar_ts[i] for i in range(len(lidar_ts))],
+#          [math.degrees(lidar_pose[i][2]) for i in range(len(lidar_pose))],
+#          '-', label='lidar', markersize=1)
+# plt.plot([stereo_ts[i] for i in range(len(stereo_pose))],
+#          [math.degrees(stereo_pose[i][2]) for i in range(len(stereo_pose))],
+#          '-', label='stereo', markersize=1)
+# plt.plot([state_fusion.trace_t[i] for i in range(len(state_fusion.trace_t))],
+#          [math.degrees(state_fusion.trace[i][2]) for i in range(len(state_fusion.trace))],
+#          '-', label='cpf', markersize=1)
+# plt.plot([outlier_removal.trace_t[i] for i in range(len(outlier_removal.trace_t))],
+#          [math.degrees(outlier_removal.trace[i][2]) for i in range(len(outlier_removal.trace))],
+#          '-', label='cpf_outlier', markersize=1)
+# # ground = np.delete(ground, -1, 0)
+# # plt.plot([ground[i][4] for i in range(len(ground))],
+# #          [math.degrees(ground[i][2]) for i in range(len(ground))],
+# #          '-', label='groundtruth', markersize=1)
+# plt.legend(loc='upper right')
+# plt.title('global heading (degree) over time')
 
 plt.show()
