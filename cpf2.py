@@ -13,7 +13,7 @@ class StateFusion:
         self.state = []
         self.ts = []
         self.stereo_cov = np.diag([0.00005, 0.00005, 10000000])
-        self.model_cov = np.diag([0.0001, 0.0001, 10000000])
+        self.model_cov = np.diag([100.0001, 100.0001, 10000000])
         self.lidar_cov = np.diag([0.0001, 0.0001, 10000000])
         self.d = []
         pass
