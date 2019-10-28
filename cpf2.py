@@ -16,6 +16,7 @@ class StateFusion:
         self.model_cov = np.diag([100.0001, 100.0001, 10000000])
         self.lidar_cov = np.diag([0.0001, 0.0001, 10000000])
         self.d = []
+        self.d9 = 16.9
         pass
     def sensor_cb(self, data):
         if data['type'] == 'lidar':
@@ -44,7 +45,7 @@ class StateFusion:
             print('error')
         lidar_state = np.array([self.last_lidar['p']]).transpose()
 
-        (state, cov, d) = self.cpf(stereo_state, model_state, lidar_state)
+        (state, cov, d) = self.cpf(stereo_state, model_state, lidar_state, True)
         self.d.append(d)
         self.state.append(state)
         self.ts.append(data['t'])
@@ -80,7 +81,7 @@ class StateFusion:
         if d > 30:
             d = 30
         if test:
-            if d > 17:
+            if d > self.d9:
                 (state1, cov1, d1) = self.cpf(None, model, lidar, False)
                 (state2, cov2, d2) = self.cpf(stereo, None, lidar, False)
                 (state3, cov3, d3) = self.cpf(stereo, model, None, False)
@@ -192,7 +193,7 @@ plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
          '-', label='stereo', linewidth=1)
 plt.plot([state_fusion.state[i][0] for i in range(len(state_fusion.state))],
          [state_fusion.state[i][1] for i in range(len(state_fusion.state))],
-         '-', label='cpf', linewidth=1)
+         '-', label='cpf', linewidth=2)
 plt.plot([outlier_removal.state[i][0] for i in range(len(outlier_removal.state))],
          [outlier_removal.state[i][1] for i in range(len(outlier_removal.state))],
          '-', label='cpf_outlier', linewidth=1)
@@ -207,5 +208,5 @@ plt.plot([state_fusion.ts[i] for i in range(0, len(state_fusion.ts))],
 plt.legend(loc='upper right')
 plt.title('CPF distance over time')
 
-
+print(state_fusion.state[-1][0], state_fusion.state[-1][1])
 plt.show()
