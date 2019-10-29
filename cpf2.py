@@ -200,7 +200,7 @@ plt.plot([outlier_removal.state[i][0] for i in range(len(outlier_removal.state))
          [outlier_removal.state[i][1] for i in range(len(outlier_removal.state))],
          '-', label='cpf_outlier', linewidth=1)
 plt.title('global position / meter')
-plt.legend(loc='upper right')
+plt.legend(loc='lower right')
 plt.gca().set_aspect('equal')
 
 plt.figure(1)
@@ -210,7 +210,7 @@ plt.plot([(state_fusion.ts[i] - state_fusion.ts[0]) / 1e11 for i in range(0, len
 plt.plot([(state_fusion.ts[i] - state_fusion.ts[0]) / 1e11 for i in range(0, len(state_fusion.ts))],
          [state_fusion.d9 for i in range(0, len(state_fusion.d))],
          '-', label='threshold', markersize=1)
-plt.legend(loc='upper left')
+plt.legend(loc='upper right')
 plt.title('CPF distance (m) over time (sec)')
 
 print(state_fusion.state[-1][0], state_fusion.state[-1][1])
