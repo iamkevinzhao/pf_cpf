@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import math
 import numpy as np
@@ -117,7 +119,7 @@ state_fusion = StateFusion()
 outlier_removal = StateFusion()
 outlier_removal.d9 = 10000
 
-filename = "/home/kevin/pf_cpf/data/orb_pose.txt"
+filename = "./data/orb_pose.txt"
 stereo_ts = []
 stereo_pose = []
 i = -1
@@ -131,7 +133,7 @@ with open(filename) as f:
         measurement = [float(parse[1]) * 1.06, float(parse[2]) * 1.06, float(parse[3])]
         stereo_pose.append(measurement)
 
-filename = "/home/kevin/pf_cpf/data/pamr_pose.txt"
+filename = "./data/pamr_pose.txt"
 lidar_ts = []
 lidar_pose = []
 i = -1
