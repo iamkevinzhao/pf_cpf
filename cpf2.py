@@ -14,7 +14,7 @@ class StateFusion:
         self.last_lidar = None
         self.state = []
         self.ts = []
-        self.stereo_cov = np.diag([0.00006, 0.00006, 10000000])
+        self.stereo_cov = np.diag([0.00036, 0.00036, 10000000])
         self.model_cov = np.diag([100.0001, 100.0001, 10000000])
         self.lidar_cov = np.diag([0.0001, 0.0001, 10000000])
         self.d = []
@@ -130,7 +130,7 @@ with open(filename) as f:
             continue
         parse = line.strip().split()
         stereo_ts.append(int(parse[0]))
-        measurement = [float(parse[1]) * 1.06, float(parse[2]) * 1.06, float(parse[3])]
+        measurement = [float(parse[1]) * 0.75, float(parse[2]) * 0.75, float(parse[3])]
         stereo_pose.append(measurement)
 
 filename = "./data/pamr_pose.txt"
@@ -143,22 +143,34 @@ with open(filename) as f:
         # if (i % 10) != 0:
         #     continue
         parse = line.strip().split()
-        if len(lidar_ts):
-            if int(parse[0]) == lidar_ts[-1]:
-                continue
+        # if len(lidar_ts):
+        #     if int(parse[0]) == lidar_ts[-1]:
+        #         continue
         lidar_ts.append(int(parse[0]))
-        x = -0.3
-        y = 0
-        phi = float(parse[3])
-        h = float(parse[1])
-        k = float(parse[2])
-        xx = x * math.cos(phi) - y * math.sin(phi) + h
-        yy = x * math.sin(phi) + y * math.cos(phi) + k
+        # x = -0.3
+        # y = 0
+        # phi = float(parse[3])
+        # h = float(parse[1])
+        # k = float(parse[2])
+        # xx = x * math.cos(phi) - y * math.sin(phi) + h
+        # yy = x * math.sin(phi) + y * math.cos(phi) + k
 
+        xx = float(parse[1])
+        yy = float(parse[2])
         if len(lidar_pose):
-            xx = xx - (lidar_pose[0][0] - 0)
-            yy = yy - (lidar_pose[0][1] - 0)
-        lidar_pose.append([xx, yy, float(parse[3])])
+            xx = xx - lidar_pose[0][0]
+            yy = yy - lidar_pose[0][1]
+        else:
+            lidar_pose.append([xx, yy, 0])
+            continue
+        angle = 180
+        s = math.sin(angle * math.pi / 180)
+        c = math.cos(angle * math.pi / 180)
+        xxx = xx * c - yy * s
+        yyy = xx * s + yy * c
+        lidar_pose.append([xxx, yyy, float(parse[3])])
+
+del lidar_pose[0]
 
 stereo_idx = 0
 lidar_idx = 0
@@ -189,10 +201,10 @@ while (stereo_idx < (len(stereo_ts) - 1)) and (lidar_idx < (len(lidar_ts) - 1)):
 plt.figure(0)
 plt.plot([lidar_pose[i][0] for i in range(len(lidar_pose))],
          [lidar_pose[i][1] for i in range(len(lidar_pose))],
-         '-', label='lidar', linewidth=1)
+         '-', label='lidar', markersize=1, linewidth=1)
 plt.plot([stereo_pose[i][0] for i in range(len(stereo_pose))],
          [stereo_pose[i][1] for i in range(len(stereo_pose))],
-         '-', label='camera', linewidth=1)
+         '-', label='camera', markersize=1, linewidth=1)
 plt.plot([state_fusion.state[i][0] for i in range(len(state_fusion.state))],
          [state_fusion.state[i][1] for i in range(len(state_fusion.state))],
          '-', label='cpf', linewidth=3)
