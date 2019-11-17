@@ -14,7 +14,7 @@ class StateFusion:
         self.last_lidar = None
         self.state = []
         self.ts = []
-        self.stereo_cov = np.diag([0.00036, 0.00036, 10000000])
+        self.stereo_cov = np.diag([0.0008, 0.0008, 10000000])
         self.model_cov = np.diag([100.0001, 100.0001, 10000000])
         self.lidar_cov = np.diag([0.0001, 0.0001, 10000000])
         self.d = []
@@ -23,6 +23,10 @@ class StateFusion:
     def sensor_cb(self, data):
         if data['type'] == 'lidar':
             self.last_lidar = data
+            scale = 0.1
+            self.lidar_cov[0, 0] = data['cov'][0] * scale
+            self.lidar_cov[1, 1] = data['cov'][1] * scale
+            self.lidar_cov[2, 2] = data['cov'][2] * scale
             if len(self.state) == 0:
                 self.state.append(np.array([data['p']]).transpose())
                 self.ts.append(data['t'])
@@ -136,6 +140,7 @@ with open(filename) as f:
 filename = "./data/pamr_pose.txt"
 lidar_ts = []
 lidar_pose = []
+lidar_cov = []
 i = -1
 with open(filename) as f:
     for line in f:
@@ -147,6 +152,7 @@ with open(filename) as f:
         #     if int(parse[0]) == lidar_ts[-1]:
         #         continue
         lidar_ts.append(int(parse[0]))
+        lidar_cov.append([float(parse[4]), float(parse[5]), float(parse[6])])
         # x = -0.3
         # y = 0
         # phi = float(parse[3])
@@ -185,6 +191,7 @@ while (stereo_idx < (len(stereo_ts) - 1)) and (lidar_idx < (len(lidar_ts) - 1)):
              'p': [lidar_pose[lidar_idx][0],
                    lidar_pose[lidar_idx][1],
                    lidar_pose[lidar_idx][2]],
+             'cov': lidar_cov[lidar_idx],
              'type': 'lidar'}
 
     if stereo['t'] < lidar['t']:
